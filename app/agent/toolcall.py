@@ -4,6 +4,9 @@ from typing import Any, List, Optional, Union
 
 from pydantic import Field
 
+from tenacity import RetryError
+from openai import AuthenticationError
+
 from app.agent.react import ReActAgent
 from app.exceptions import TokenLimitExceeded
 from app.logger import logger
@@ -57,7 +60,38 @@ class ToolCallAgent(ReActAgent):
         except ValueError:
             raise
         except Exception as e:
-            # Check if this is a RetryError containing TokenLimitExceeded
+            # Handle Tenacity RetryError cases (e.g., auth failure, token limit)
+            if isinstance(e, RetryError):
+                cause = e.last_attempt.exception()
+                if isinstance(cause, AuthenticationError):
+                    logger.error(
+                        "🚨 LLM authentication failed across retries (likely bad key/config). "
+                        "Please update credentials in config.toml."
+                    )
+                    self.memory.add_message(
+                        Message.assistant_message(
+                            "Authentication failed for the configured LLM provider(s). "
+                            "Please verify api_key/base_url/model in config.toml and try again."
+                        )
+                    )
+                    self.state = AgentState.FINISHED
+                    return False
+
+                # Token limit handling (existing behavior)
+                if isinstance(cause, TokenLimitExceeded):
+                    token_limit_error = cause
+                    logger.error(
+                        f"🚨 Token limit error (from RetryError): {token_limit_error}"
+                    )
+                    self.memory.add_message(
+                        Message.assistant_message(
+                            f"Maximum token limit reached, cannot continue execution: {str(token_limit_error)}"
+                        )
+                    )
+                    self.state = AgentState.FINISHED
+                    return False
+
+            # Non-RetryError: preserve original behavior
             if hasattr(e, "__cause__") and isinstance(e.__cause__, TokenLimitExceeded):
                 token_limit_error = e.__cause__
                 logger.error(

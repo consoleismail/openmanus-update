@@ -1,36 +1,57 @@
 import argparse
 import asyncio
+import sys
 
 from app.agent.manus import Manus
 from app.logger import logger
 
 
 async def main():
-    # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run Manus agent with a prompt")
-    parser.add_argument(
-        "--prompt", type=str, required=False, help="Input prompt for the agent"
-    )
+    parser.add_argument("--prompt", type=str, required=False)
     args = parser.parse_args()
 
-    # Create and initialize Manus agent
-    agent = await Manus.create()
+    agent = None
     try:
-        # Use command line prompt if provided, otherwise ask for input
-        prompt = args.prompt if args.prompt else input("Enter your prompt: ")
-        if not prompt.strip():
-            logger.warning("Empty prompt provided.")
-            return
+        agent = await Manus.create()
 
-        logger.warning("Processing your request...")
-        await agent.run(prompt)
-        logger.info("Request processing completed.")
-    except KeyboardInterrupt:
-        logger.warning("Operation interrupted.")
+        while True:
+            try:
+                prompt = args.prompt if args.prompt else input("Enter your prompt: ")
+                args.prompt = None  # only once
+
+                if not prompt.strip():
+                    logger.warning("Empty prompt.")
+                    continue
+
+                logger.info("Processing your request...")
+                await agent.run(prompt)
+                logger.info("Done.")
+
+            except KeyboardInterrupt:
+                logger.warning("Interrupted by user.")
+                return
+
+            except Exception as e:
+                logger.exception("Runtime error occurred")
+
+                # 🔴 USER CHOICE
+                choice = input("Error occurred. Continue? [y/N]: ").strip().lower()
+                if choice != "y":
+                    return
+
     finally:
-        # Ensure agent resources are cleaned up before exiting
-        await agent.cleanup()
+        if agent:
+            try:
+                await agent.cleanup()
+            except Exception:
+                logger.exception("Cleanup failed")
+
+
+def run():
+    asyncio.run(main())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # ❌ no supervisor for interactive mode
+    run()
