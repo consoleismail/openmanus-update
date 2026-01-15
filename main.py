@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import sys
 
+from openai import APIConnectionError
 from app.agent.manus import Manus
 from app.logger import logger
 
@@ -31,6 +32,14 @@ async def main():
             except KeyboardInterrupt:
                 logger.warning("Interrupted by user.")
                 return
+
+            except APIConnectionError:
+                logger.error("Connection error: Unable to connect to the LLM provider. Please check your internet connection.")
+                
+                # 🔴 USER CHOICE
+                choice = input("Error occurred. Continue? [y/N]: ").strip().lower()
+                if choice != "y":
+                    return
 
             except Exception as e:
                 logger.exception("Runtime error occurred")

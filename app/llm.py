@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Union
 import tiktoken
 from openai import (
     APIError,
+    APIStatusError,
     AsyncAzureOpenAI,
     AsyncOpenAI,
     AuthenticationError,

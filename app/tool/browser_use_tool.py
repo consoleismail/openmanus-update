@@ -12,6 +12,7 @@ from pydantic_core.core_schema import ValidationInfo
 
 from app.config import config
 from app.llm import LLM
+from app.logger import logger
 from app.tool.base import BaseTool, ToolResult
 from app.tool.web_search import WebSearch
 
@@ -140,6 +141,15 @@ class BrowserUseTool(BaseTool, Generic[Context]):
 
     async def _ensure_browser_initialized(self) -> BrowserContext:
         """Ensure browser and context are initialized."""
+        import os
+        from app.config import PROJECT_ROOT
+        
+        # Set Playwright browsers path to project root for persistence
+        browsers_path = PROJECT_ROOT / ".playwright-browsers"
+        if browsers_path.exists():
+            os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers_path)
+            logger.info(f"Setting PLAYWRIGHT_BROWSERS_PATH to {browsers_path}")
+
         if self.browser is None:
             browser_config_kwargs = {"headless": False, "disable_security": True}
 
@@ -431,7 +441,7 @@ Page content:
                     response = await self.llm.ask_tool(
                         messages,
                         tools=[extraction_function],
-                        tool_choice="required",
+                        tool_choice={"type": "function", "function": {"name": "extract_content"}},
                     )
 
                     if response and response.tool_calls:

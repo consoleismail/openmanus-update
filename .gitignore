@@ -8,6 +8,9 @@ data/
 # Workspace
 workspace/
 
+# Playwright Browsers (Persistent)
+.playwright-browsers/
+
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/

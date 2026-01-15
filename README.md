@@ -72,9 +72,13 @@ uv pip install -r requirements.txt
 
 ### Browser Automation Setup
 
+To ensure browser automation works correctly and persists across sessions (especially in ephemeral environments like Daytona), use the provided setup script:
+
 ```bash
-playwright install
+python setup_browsers.py
 ```
+
+This script installs Chromium into a local `.playwright-browsers` directory within the project, which OpenManus is configured to detect and use automatically.
 
 ### Configuration
 
