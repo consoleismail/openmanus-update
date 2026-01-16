@@ -19,6 +19,7 @@ from app.tool import (
     Terminate,
     ToolCollection,
     WebSearch,
+    WhoisLookup,
 )
 
 
@@ -48,6 +49,7 @@ class Manus(ToolCallAgent):
             StrReplaceEditor(),
             AskHuman(),
             Terminate(),
+            WhoisLookup(),
         )
     )
 

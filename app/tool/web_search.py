@@ -297,30 +297,36 @@ class WebSearch(BaseTool):
         for engine_name in engine_order:
             engine = self._search_engine[engine_name]
             logger.info(f"🔎 Attempting search with {engine_name.capitalize()}...")
-            search_items = await self._perform_search_with_engine(
-                engine, query, num_results, search_params
-            )
+            try:
+                search_items = await self._perform_search_with_engine(
+                    engine, query, num_results, search_params
+                )
 
-            if not search_items:
+                if not search_items:
+                    failed_engines.append(engine_name)
+                    continue
+
+                if failed_engines:
+                    logger.info(
+                        f"Search successful with {engine_name.capitalize()} after trying: {', '.join(failed_engines)}"
+                    )
+
+                # Transform search items into structured results
+                return [
+                    SearchResult(
+                        position=i + 1,
+                        url=item.url,
+                        title=item.title
+                        or f"Result {i+1}",  # Ensure we always have a title
+                        description=item.description or "",
+                        source=engine_name,
+                    )
+                    for i, item in enumerate(search_items)
+                ]
+            except Exception as e:
+                logger.warning(f"❌ Search engine {engine_name} failed: {str(e)}")
+                failed_engines.append(engine_name)
                 continue
-
-            if failed_engines:
-                logger.info(
-                    f"Search successful with {engine_name.capitalize()} after trying: {', '.join(failed_engines)}"
-                )
-
-            # Transform search items into structured results
-            return [
-                SearchResult(
-                    position=i + 1,
-                    url=item.url,
-                    title=item.title
-                    or f"Result {i+1}",  # Ensure we always have a title
-                    description=item.description or "",
-                    source=engine_name,
-                )
-                for i, item in enumerate(search_items)
-            ]
 
         if failed_engines:
             logger.error(f"All search engines failed: {', '.join(failed_engines)}")

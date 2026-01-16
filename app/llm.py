@@ -590,7 +590,7 @@ class LLM:
                             "All configured LLM providers are out of credits/quota (402). "
                             "Update provider plan or reduce usage."
                         )
-                elif status in (401, 403, 429, 500, 502, 503, 504):
+                elif status in (401, 403, 404, 429, 500, 502, 503, 504):
                     logger.warning(f"Auto-switching LLM due to HTTP {status}: {e}")
                     last_exception = e
                     if not self._switch_to_next_llm():

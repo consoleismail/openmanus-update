@@ -19,14 +19,15 @@ class GoogleSearchEngine(WebSearchEngine):
         results = []
         for i, item in enumerate(raw_results):
             if isinstance(item, str):
-                # If it's just a URL
                 results.append(
-                    {"title": f"Google Result {i+1}", "url": item, "description": ""}
+                    SearchItem(title=f"Google Result {i+1}", url=item, description="")
                 )
             else:
                 results.append(
                     SearchItem(
-                        title=item.title, url=item.url, description=item.description
+                        title=getattr(item, "title", f"Google Result {i+1}"),
+                        url=getattr(item, "url", str(item)),
+                        description=getattr(item, "description", ""),
                     )
                 )
 

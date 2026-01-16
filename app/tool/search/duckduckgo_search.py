@@ -14,7 +14,12 @@ class DuckDuckGoSearchEngine(WebSearchEngine):
 
         Returns results formatted according to SearchItem model.
         """
-        raw_results = DDGS().text(query, max_results=num_results)
+        try:
+            raw_results = DDGS().text(query, max_results=num_results)
+        except Exception as e:
+            from app.logger import logger
+            logger.warning(f"DuckDuckGo search failed: {e}")
+            return []
 
         results = []
         for i, item in enumerate(raw_results):
