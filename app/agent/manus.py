@@ -7,12 +7,19 @@ from app.agent.toolcall import ToolCallAgent
 from app.config import config
 from app.logger import logger
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
-from app.tool import Terminate, ToolCollection
-from app.tool.ask_human import AskHuman
-from app.tool.browser_use_tool import BrowserUseTool
-from app.tool.mcp import MCPClients, MCPClientTool
-from app.tool.python_execute import PythonExecute
-from app.tool.str_replace_editor import StrReplaceEditor
+from app.tool import (
+    AskHuman,
+    BrowserUseTool,
+    Crawl4aiTool,
+    MCPClients,
+    MCPClientTool,
+    PlanningTool,
+    PythonExecute,
+    StrReplaceEditor,
+    Terminate,
+    ToolCollection,
+    WebSearch,
+)
 
 
 class Manus(ToolCallAgent):
@@ -35,6 +42,9 @@ class Manus(ToolCallAgent):
         default_factory=lambda: ToolCollection(
             PythonExecute(),
             BrowserUseTool(),
+            WebSearch(),
+            PlanningTool(),
+            Crawl4aiTool(),
             StrReplaceEditor(),
             AskHuman(),
             Terminate(),

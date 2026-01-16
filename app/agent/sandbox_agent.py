@@ -9,9 +9,16 @@ from app.daytona.sandbox import create_sandbox, delete_sandbox
 from app.daytona.tool_base import SandboxToolsBase
 from app.logger import logger
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
-from app.tool import Terminate, ToolCollection
-from app.tool.ask_human import AskHuman
-from app.tool.mcp import MCPClients, MCPClientTool
+from app.tool import (
+    AskHuman,
+    Crawl4aiTool,
+    MCPClients,
+    MCPClientTool,
+    PlanningTool,
+    Terminate,
+    ToolCollection,
+    WebSearch,
+)
 from app.tool.sandbox.sb_browser_tool import SandboxBrowserTool
 from app.tool.sandbox.sb_files_tool import SandboxFilesTool
 from app.tool.sandbox.sb_shell_tool import SandboxShellTool
@@ -36,9 +43,9 @@ class SandboxManus(ToolCallAgent):
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
-            # PythonExecute(),
-            # BrowserUseTool(),
-            # StrReplaceEditor(),
+            WebSearch(),
+            PlanningTool(),
+            Crawl4aiTool(),
             AskHuman(),
             Terminate(),
         )
