@@ -462,25 +462,60 @@ class LLM:
                 self.total_completion_tokens += completion_tokens
 
                 return full_response
-            except (RateLimitError, TokenLimitExceeded) as e:
-                logger.warning(f"Auto-switching LLM due to error: {e}")
+            except TokenLimitExceeded as e:
+                logger.warning(f"Auto-switching LLM due to token limit: {e}")
                 last_exception = e
                 if not self._switch_to_next_llm():
-                    logger.error("No more LLM configs available to switch.")
-                    raise last_exception
-                attempt += 1
-                continue
-            except APIStatusError as e:
-                # Handle insufficient credits (error code 402)
-                if hasattr(e, 'status_code') and e.status_code == 402:
-                    logger.error(f"Insufficient credits or quota: {e}")
-                    raise RuntimeError("Your LLM provider account is out of credits or quota. Please reduce max_tokens or upgrade your plan.")
-                else:
-                    logger.exception(f"APIStatusError in ask: {e}")
                     raise
+
+            except AuthenticationError as e:
+                logger.warning(f"Auto-switching LLM due to authentication error: {e}")
+                last_exception = e
+                if not self._switch_to_next_llm():
+                    raise
+
+            except RateLimitError as e:
+                logger.warning(f"Auto-switching LLM due to rate limit: {e}")
+                last_exception = e
+                if not self._switch_to_next_llm():
+                    raise
+
+            except APIStatusError as e:
+                status = getattr(e, "status_code", None)
+                if status == 402:
+                    logger.warning(f"Auto-switching LLM due to quota/credits (402): {e}")
+                    last_exception = e
+                    if not self._switch_to_next_llm():
+                        raise RuntimeError(
+                            "All configured LLM providers are out of credits/quota (402). "
+                            "Update provider plan or reduce usage."
+                        )
+                elif status in (401, 403, 404, 429, 500, 502, 503, 504):
+                    logger.warning(f"Auto-switching LLM due to HTTP {status}: {e}")
+                    last_exception = e
+                    if not self._switch_to_next_llm():
+                        raise
+                else:
+                    logger.exception(f"APIStatusError in ask (non-failover): {e}")
+                    raise
+
+            except APIError as e:
+                logger.warning(f"Auto-switching LLM due to APIError: {e}")
+                last_exception = e
+                if not self._switch_to_next_llm():
+                    raise
+
+            except OpenAIError as e:
+                logger.warning(f"Auto-switching LLM due to OpenAIError: {e}")
+                last_exception = e
+                if not self._switch_to_next_llm():
+                    raise
+
             except Exception as e:
                 logger.exception(f"Unexpected error in ask: {e}")
                 raise
+
+            attempt += 1
 
     async def ask_tool(
         self,
