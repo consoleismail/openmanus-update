@@ -2,7 +2,7 @@ import asyncio
 import time
 
 from app.agent.data_analysis import DataAnalysis
-from app.agent.manus import Manus
+from app.agent.manus import WorkCo
 from app.config import config
 from app.flow.flow_factory import FlowFactory, FlowType
 from app.logger import logger
@@ -10,7 +10,7 @@ from app.logger import logger
 
 async def run_flow():
     agents = {
-        "manus": Manus(),
+        "workco": WorkCo(),
     }
     if config.run_flow_config.use_data_analysis_agent:
         agents["data_analysis"] = DataAnalysis()

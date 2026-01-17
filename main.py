@@ -3,18 +3,18 @@ import asyncio
 import sys
 
 from openai import APIConnectionError
-from app.agent.manus import Manus
+from app.agent.manus import WorkCo
 from app.logger import logger
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Run Manus agent with a prompt")
+    parser = argparse.ArgumentParser(description="Run WorkCo agent with a prompt")
     parser.add_argument("--prompt", type=str, required=False)
     args = parser.parse_args()
 
     agent = None
     try:
-        agent = await Manus.create()
+        agent = await WorkCo.create()
 
         while True:
             try:
@@ -26,7 +26,8 @@ async def main():
                     continue
 
                 logger.info("Processing your request...")
-                await agent.run(prompt)
+                result = await agent.run(prompt)
+                print(f"\n{result}")
                 logger.info("Done.")
 
             except KeyboardInterrupt:

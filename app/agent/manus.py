@@ -23,11 +23,11 @@ from app.tool import (
 )
 
 
-class Manus(ToolCallAgent):
-    """A versatile general-purpose agent with support for both local and MCP tools."""
+class WorkCo(ToolCallAgent):
+    """A proactive AI companion that anticipates user needs and suggests next steps."""
 
-    name: str = "Manus"
-    description: str = "A versatile agent that can solve various tasks using multiple tools including MCP-based tools"
+    name: str = "WorkCo"
+    description: str = "A proactive AI companion that anticipates user needs and suggests next steps."
 
     system_prompt: str = SYSTEM_PROMPT.format(directory=config.workspace_root)
     next_step_prompt: str = NEXT_STEP_PROMPT
@@ -63,14 +63,14 @@ class Manus(ToolCallAgent):
     _initialized: bool = False
 
     @model_validator(mode="after")
-    def initialize_helper(self) -> "Manus":
+    def initialize_helper(self) -> "WorkCo":
         """Initialize basic components synchronously."""
         self.browser_context_helper = BrowserContextHelper(self)
         return self
 
     @classmethod
-    async def create(cls, **kwargs) -> "Manus":
-        """Factory method to create and properly initialize a Manus instance."""
+    async def create(cls, **kwargs) -> "WorkCo":
+        """Factory method to create and properly initialize a WorkCo instance."""
         instance = cls(**kwargs)
         await instance.initialize_mcp_servers()
         instance._initialized = True
@@ -141,7 +141,7 @@ class Manus(ToolCallAgent):
         self.available_tools.add_tools(*self.mcp_clients.tools)
 
     async def cleanup(self):
-        """Clean up Manus agent resources."""
+        """Clean up WorkCo agent resources."""
         if self.browser_context_helper:
             await self.browser_context_helper.cleanup_browser()
         # Disconnect from all MCP servers only if we were initialized
