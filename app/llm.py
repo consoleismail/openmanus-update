@@ -192,15 +192,33 @@ class LLM:
             llm_dict = (llm_config or config.llm)
             # Collect all available config names (default, primary, backup, backup2, ...)
             if not LLM._llm_config_names:
-                LLM._llm_config_names = [k for k in llm_dict.keys() if isinstance(llm_dict[k], dict) or isinstance(llm_dict[k], LLMSettings)]
-                if "default" not in LLM._llm_config_names:
-                    LLM._llm_config_names.insert(0, "default")
+                # Define the preferred order for failover
+                preferred_order = ["default", "primary", "backup", "backup2", "backup3", "backup4", "backup5", "backup6"]
+
+                # Get all keys from the config
+                available_keys = list(llm_dict.keys())
+
+                # Build the final list based on preferred order first
+                ordered_names = [name for name in preferred_order if name in available_keys]
+
+                # Add any other keys that weren't in the preferred list (excluding 'vision')
+                other_names = [name for name in available_keys if name not in ordered_names and name != "vision"]
+
+                LLM._llm_config_names = ordered_names + other_names
+
+                if not LLM._llm_config_names:
+                    LLM._llm_config_names = ["default"]
+
             self._llm_dict = llm_dict
             self._current_idx = LLM._llm_config_names.index(config_name) if config_name in LLM._llm_config_names else 0
             self._set_config(LLM._llm_config_names[self._current_idx])
 
     def _set_config(self, config_name: str):
-        llm_cfg = self._llm_dict.get(config_name, self._llm_dict["default"])
+        llm_cfg = self._llm_dict.get(config_name, self._llm_dict.get("default"))
+        if not llm_cfg:
+            # Fallback to the first available if default is missing
+            llm_cfg = next(iter(self._llm_dict.values()))
+
         self.model = llm_cfg["model"] if isinstance(llm_cfg, dict) else llm_cfg.model
         self.max_tokens = llm_cfg.get("max_tokens", 4096) if isinstance(llm_cfg, dict) else llm_cfg.max_tokens
         self.temperature = llm_cfg.get("temperature", 1.0) if isinstance(llm_cfg, dict) else llm_cfg.temperature
@@ -230,8 +248,9 @@ class LLM:
     def _switch_to_next_llm(self):
         if self._current_idx + 1 < len(LLM._llm_config_names):
             self._current_idx += 1
-            self._set_config(LLM._llm_config_names[self._current_idx])
-            logger.warning(f"Switched to next LLM config: {LLM._llm_config_names[self._current_idx]}")
+            config_name = LLM._llm_config_names[self._current_idx]
+            self._set_config(config_name)
+            logger.warning(f"Switched to next LLM config: {config_name} (Model: {self.model})")
             return True
         return False
 
@@ -264,102 +283,16 @@ class LLM:
         return True
 
     def get_limit_error_message(self, input_tokens: int) -> str:
-        """Generate error message for token limit exceeded"""
-        if (
-            self.max_input_tokens is not None
-            and (self.total_input_tokens + input_tokens) > self.max_input_tokens
-        ):
-            return f"Request may exceed input token limit (Current: {self.total_input_tokens}, Needed: {input_tokens}, Max: {self.max_input_tokens})"
+        return f"Token limit exceeded: {self.total_input_tokens + input_tokens} > {self.max_input_tokens}"
 
-        return "Token limit exceeded"
-
-    @staticmethod
-    def format_messages(
-        messages: List[Union[dict, Message]], supports_images: bool = False
-    ) -> List[dict]:
-        """
-        Format messages for LLM by converting them to OpenAI message format.
-
-        Args:
-            messages: List of messages that can be either dict or Message objects
-            supports_images: Flag indicating if the target model supports image inputs
-
-        Returns:
-            List[dict]: List of formatted messages in OpenAI format
-
-        Raises:
-            ValueError: If messages are invalid or missing required fields
-            TypeError: If unsupported message types are provided
-
-        Examples:
-            >>> msgs = [
-            ...     Message.system_message("You are a helpful assistant"),
-            ...     {"role": "user", "content": "Hello"},
-            ...     Message.user_message("How are you?")
-            ... ]
-            >>> formatted = LLM.format_messages(msgs)
-        """
-        formatted_messages = []
-
-        for message in messages:
-            # Convert Message objects to dictionaries
-            if isinstance(message, Message):
-                message = message.to_dict()
-
-            if isinstance(message, dict):
-                # If message is a dict, ensure it has required fields
-                if "role" not in message:
-                    raise ValueError("Message dict must contain 'role' field")
-
-                # Process base64 images if present and model supports images
-                if supports_images and message.get("base64_image"):
-                    # Initialize or convert content to appropriate format
-                    if not message.get("content"):
-                        message["content"] = []
-                    elif isinstance(message["content"], str):
-                        message["content"] = [
-                            {"type": "text", "text": message["content"]}
-                        ]
-                    elif isinstance(message["content"], list):
-                        # Convert string items to proper text objects
-                        message["content"] = [
-                            (
-                                {"type": "text", "text": item}
-                                if isinstance(item, str)
-                                else item
-                            )
-                            for item in message["content"]
-                        ]
-
-                    # Add the image to content
-                    message["content"].append(
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{message['base64_image']}"
-                            },
-                        }
-                    )
-
-                    # Remove the base64_image field
-                    del message["base64_image"]
-                # If model doesn't support images but message has base64_image, handle gracefully
-                elif not supports_images and message.get("base64_image"):
-                    # Just remove the base64_image field and keep the text content
-                    del message["base64_image"]
-
-                if "content" in message or "tool_calls" in message:
-                    formatted_messages.append(message)
-                # else: do not include the message
+    def format_messages(self, messages: List[Union[dict, Message]], supports_images: bool) -> List[dict]:
+        formatted = []
+        for msg in messages:
+            if isinstance(msg, Message):
+                formatted.append(msg.to_dict())
             else:
-                raise TypeError(f"Unsupported message type: {type(message)}")
-
-        # Validate all messages have required fields
-        for msg in formatted_messages:
-            if msg["role"] not in ROLE_VALUES:
-                raise ValueError(f"Invalid role: {msg['role']}")
-
-        return formatted_messages
+                formatted.append(msg)
+        return formatted
 
     async def ask(
         self,
@@ -369,32 +302,17 @@ class LLM:
         temperature: Optional[float] = None,
     ) -> str:
         """
-        Send a prompt to the LLM and get the response.
-
-        Args:
-            messages: List of conversation messages
-            system_msgs: Optional system messages to prepend
-            stream (bool): Whether to stream the response
-            temperature (float): Sampling temperature for the response
-
-        Returns:
-            str: The generated response
-
-        Raises:
-            TokenLimitExceeded: If token limits are exceeded
-            ValueError: If messages are invalid or response is empty
-            OpenAIError: If API call fails after retries
-            Exception: For unexpected errors
+        Ask LLM and return the response, with provider failover.
         """
         attempt = 0
-        max_attempts = len(LLM._llm_config_names) - self._current_idx
-        last_exception = None
+        max_attempts = len(LLM._llm_config_names)
+        last_exception: Exception | None = None
+
         while attempt < max_attempts:
             try:
                 supports_images = self.model in MULTIMODAL_MODELS
                 if system_msgs:
-                    system_msgs = self.format_messages(system_msgs, supports_images)
-                    messages = system_msgs + self.format_messages(messages, supports_images)
+                    messages = self.format_messages(system_msgs, supports_images) + self.format_messages(messages, supports_images)
                 else:
                     messages = self.format_messages(messages, supports_images)
 
@@ -404,7 +322,6 @@ class LLM:
                 # Check if token limits are exceeded
                 if not self.check_token_limit(input_tokens):
                     error_message = self.get_limit_error_message(input_tokens)
-                    # Raise a special exception that won't be retried
                     raise TokenLimitExceeded(error_message)
 
                 params = {
@@ -436,7 +353,7 @@ class LLM:
 
                     return response.choices[0].message.content
 
-                # Streaming request, For streaming, update estimated token count before making the request
+                # Streaming request
                 self.update_token_count(input_tokens)
 
                 response = await self.client.chat.completions.create(**params, stream=True)
@@ -444,10 +361,11 @@ class LLM:
                 collected_messages = []
                 completion_text = ""
                 async for chunk in response:
-                    chunk_message = chunk.choices[0].delta.content or ""
-                    collected_messages.append(chunk_message)
-                    completion_text += chunk_message
-                    print(chunk_message, end="", flush=True)
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        chunk_message = chunk.choices[0].delta.content
+                        collected_messages.append(chunk_message)
+                        completion_text += chunk_message
+                        print(chunk_message, end="", flush=True)
 
                 print()  # Newline after streaming
                 full_response = "".join(collected_messages).strip()
@@ -456,41 +374,18 @@ class LLM:
 
                 # estimate completion tokens for streaming response
                 completion_tokens = self.count_tokens(completion_text)
-                logger.info(
-                    f"Estimated completion tokens for streaming response: {completion_tokens}"
-                )
                 self.total_completion_tokens += completion_tokens
 
                 return full_response
-            except TokenLimitExceeded as e:
-                logger.warning(f"Auto-switching LLM due to token limit: {e}")
+
+            except (TokenLimitExceeded, AuthenticationError, RateLimitError, APIError, OpenAIError) as e:
+                logger.warning(f"Auto-switching LLM due to {type(e).__name__}: {e}")
                 last_exception = e
                 if not self._switch_to_next_llm():
                     raise
-
-            except AuthenticationError as e:
-                logger.warning(f"Auto-switching LLM due to authentication error: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
-
-            except RateLimitError as e:
-                logger.warning(f"Auto-switching LLM due to rate limit: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
-
             except APIStatusError as e:
                 status = getattr(e, "status_code", None)
-                if status == 402:
-                    logger.warning(f"Auto-switching LLM due to quota/credits (402): {e}")
-                    last_exception = e
-                    if not self._switch_to_next_llm():
-                        raise RuntimeError(
-                            "All configured LLM providers are out of credits/quota (402). "
-                            "Update provider plan or reduce usage."
-                        )
-                elif status in (401, 403, 404, 429, 500, 502, 503, 504):
+                if status in (401, 402, 403, 404, 429, 500, 502, 503, 504):
                     logger.warning(f"Auto-switching LLM due to HTTP {status}: {e}")
                     last_exception = e
                     if not self._switch_to_next_llm():
@@ -498,19 +393,6 @@ class LLM:
                 else:
                     logger.exception(f"APIStatusError in ask (non-failover): {e}")
                     raise
-
-            except APIError as e:
-                logger.warning(f"Auto-switching LLM due to APIError: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
-
-            except OpenAIError as e:
-                logger.warning(f"Auto-switching LLM due to OpenAIError: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
-
             except Exception as e:
                 logger.exception(f"Unexpected error in ask: {e}")
                 raise
@@ -529,17 +411,9 @@ class LLM:
     ) -> ChatCompletionMessage | None:
         """
         Ask LLM using functions/tools and return the response, with provider failover.
-
-        Failover policy (centralized config):
-        - Authentication / 401-403: switch to next LLM config.
-        - Rate limit / 429: switch to next LLM config.
-        - Quota / 402: switch to next LLM config (if any), otherwise raise with clear message.
-        - Transient 5xx/timeouts: switch to next LLM config.
-        - TokenLimitExceeded: switch to next LLM config.
         """
-
         attempt = 0
-        max_attempts = max(1, len(LLM._llm_config_names) - self._current_idx)
+        max_attempts = len(LLM._llm_config_names)
         last_exception: Exception | None = None
 
         while attempt < max_attempts:
@@ -597,35 +471,14 @@ class LLM:
                 )
                 return response.choices[0].message
 
-            except TokenLimitExceeded as e:
-                logger.warning(f"Auto-switching LLM due to token limit: {e}")
+            except (TokenLimitExceeded, AuthenticationError, RateLimitError, APIError, OpenAIError, ValueError) as e:
+                logger.warning(f"Auto-switching LLM due to {type(e).__name__}: {e}")
                 last_exception = e
                 if not self._switch_to_next_llm():
                     raise
-
-            except AuthenticationError as e:
-                logger.warning(f"Auto-switching LLM due to authentication error: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
-
-            except RateLimitError as e:
-                logger.warning(f"Auto-switching LLM due to rate limit: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
-
             except APIStatusError as e:
                 status = getattr(e, "status_code", None)
-                if status == 402:
-                    logger.warning(f"Auto-switching LLM due to quota/credits (402): {e}")
-                    last_exception = e
-                    if not self._switch_to_next_llm():
-                        raise RuntimeError(
-                            "All configured LLM providers are out of credits/quota (402). "
-                            "Update provider plan or reduce usage."
-                        )
-                elif status in (401, 403, 404, 429, 500, 502, 503, 504):
+                if status in (401, 402, 403, 404, 429, 500, 502, 503, 504):
                     logger.warning(f"Auto-switching LLM due to HTTP {status}: {e}")
                     last_exception = e
                     if not self._switch_to_next_llm():
@@ -633,29 +486,12 @@ class LLM:
                 else:
                     logger.exception(f"APIStatusError in ask_tool (non-failover): {e}")
                     raise
-
-            except APIError as e:
-                logger.warning(f"Auto-switching LLM due to APIError: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
-
-            except OpenAIError as e:
-                logger.warning(f"Auto-switching LLM due to OpenAIError: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
-
-            except ValueError as e:
-                # Model/tool incompatibility or config issue -> try next config if possible
-                logger.warning(f"Auto-switching LLM due to validation/config error: {e}")
-                last_exception = e
-                if not self._switch_to_next_llm():
-                    raise
+            except Exception as e:
+                logger.exception(f"Unexpected error in ask_tool: {e}")
+                raise
 
             attempt += 1
 
         if last_exception:
             raise last_exception
         return None
-
