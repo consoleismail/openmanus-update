@@ -41,3 +41,33 @@ crawl4ai~=0.7.2
 huggingface-hub~=0.29.2
 setuptools~=75.8.0
 rich>=13.7.0
+
+# === Manus Evo Dependencies ===
+
+# Vector Database
+chromadb>=0.4.0
+
+# Embeddings (Semantic Search)
+sentence-transformers>=2.2.0
+transformers>=4.30.0
+torch>=2.0.0
+
+# Image Processing (CLIP, Multimodal)
+# NOTE: CLIP uses transformers, already included
+
+# Audio Processing (Whisper)
+openai-whisper>=20231117
+soundfile>=0.12.0
+
+# Google APIs (Calendar, Gmail integration)
+google-api-python-client>=2.0.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.1.0
+
+# Async scheduling
+apscheduler>=3.10.0
+aiohttp>=3.8.0
+
+# Data processing
+pandas>=2.0.0
+scikit-learn>=1.3.0
